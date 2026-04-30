@@ -1,0 +1,6 @@
+.env
+uploaded_files/
+__pycache__/
+*.csv
+run_app.bat
+.streamlit/
