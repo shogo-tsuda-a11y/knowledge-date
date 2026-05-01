@@ -10,6 +10,9 @@ import extractor
 # ページの基本設定
 st.set_page_config(page_title="FAQ Extractor", page_icon="🤖", layout="wide", initial_sidebar_state="collapsed")
 
+# 最後に生成したFAQを保存するファイル名
+LAST_FAQ_FILE = "last_generated_faq.csv"
+
 # --- 認証機能 ---
 def check_password():
     """パスワードが正しいかチェックする"""
@@ -31,9 +34,7 @@ def check_password():
     return False
 
 if check_password():
-    # セッション状態の初期化（データを消さないための設定）
-    if "faq_result" not in st.session_state:
-        st.session_state.faq_result = None
+    # セッション状態の初期化
     if "messages" not in st.session_state:
         st.session_state.messages = []
 
@@ -115,38 +116,39 @@ if check_password():
                         response = model.generate_content(prompt)
                         faq_result = response.text
                         faq_result = faq_result.replace("```csv", "").replace("```", "").strip()
-                        # セッションに結果を保存
-                        st.session_state.faq_result = faq_result
+                        
+                        # サーバー上に保存（全員で共有するため）
+                        with open(LAST_FAQ_FILE, "w", encoding="utf-8") as f:
+                            f.write(faq_result)
+                        
                         st.success("FAQの生成が完了しました！")
+                        st.rerun() # 再読み込みして表示を更新
                     except Exception as e:
                         st.error(f"エラーが発生しました: {e}")
 
-        # 保存されているFAQがあれば表示する
-        if st.session_state.faq_result:
-            st.subheader("生成されたFAQ (プレビュー)")
-            faq_result = st.session_state.faq_result
+        # 保存されているFAQがあれば読み込んで表示する
+        if os.path.exists(LAST_FAQ_FILE):
+            st.subheader("📊 最後に生成されたFAQ (全員に共通)")
             try:
+                with open(LAST_FAQ_FILE, "r", encoding="utf-8") as f:
+                    faq_result = f.read()
+                
                 df_result = pd.read_csv(io.StringIO(faq_result))
                 edited_df = st.data_editor(df_result, use_container_width=True, num_rows="dynamic", key="faq_editor")
+                
+                col1, col2 = st.columns([0.2, 0.8])
                 csv_data = edited_df.to_csv(index=False).encode('utf-8')
-                st.download_button(
+                col1.download_button(
                     label="📥 CSVをダウンロード",
                     data=csv_data,
                     file_name="extracted_faq.csv",
                     mime="text/csv"
                 )
+                if col2.button("⚠️ 生成結果を完全に消去する"):
+                    os.remove(LAST_FAQ_FILE)
+                    st.rerun()
             except Exception as e:
-                st.text_area("生成結果", faq_result, height=300)
-                st.download_button(
-                    label="📥 CSVをダウンロード",
-                    data=faq_result.encode('utf-8'),
-                    file_name="extracted_faq.csv",
-                    mime="text/csv"
-                )
-            
-            if st.button("結果をクリア"):
-                st.session_state.faq_result = None
-                st.rerun()
+                st.info("生成済みのデータがありますが、読み込みに失敗しました。再度生成してください。")
 
     elif app_mode == "QAチャット":
         st.title("💬 QAチャット")
