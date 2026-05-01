@@ -31,6 +31,12 @@ def check_password():
     return False
 
 if check_password():
+    # セッション状態の初期化（データを消さないための設定）
+    if "faq_result" not in st.session_state:
+        st.session_state.faq_result = None
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
+
     # サイドバー: 設定
     with st.sidebar:
         st.header("⚙️ メニュー")
@@ -109,38 +115,42 @@ if check_password():
                         response = model.generate_content(prompt)
                         faq_result = response.text
                         faq_result = faq_result.replace("```csv", "").replace("```", "").strip()
-                        
+                        # セッションに結果を保存
+                        st.session_state.faq_result = faq_result
                         st.success("FAQの生成が完了しました！")
-                        st.subheader("生成されたFAQ (プレビュー)")
-                        
-                        try:
-                            df_result = pd.read_csv(io.StringIO(faq_result))
-                            edited_df = st.data_editor(df_result, use_container_width=True, num_rows="dynamic")
-                            csv_data = edited_df.to_csv(index=False).encode('utf-8')
-                            st.download_button(
-                                label="📥 CSVをダウンロード",
-                                data=csv_data,
-                                file_name="extracted_faq.csv",
-                                mime="text/csv"
-                            )
-                        except Exception as e:
-                            st.text_area("生成結果", faq_result, height=300)
-                            st.download_button(
-                                label="📥 CSVをダウンロード",
-                                data=faq_result.encode('utf-8'),
-                                file_name="extracted_faq.csv",
-                                mime="text/csv"
-                            )
                     except Exception as e:
                         st.error(f"エラーが発生しました: {e}")
+
+        # 保存されているFAQがあれば表示する
+        if st.session_state.faq_result:
+            st.subheader("生成されたFAQ (プレビュー)")
+            faq_result = st.session_state.faq_result
+            try:
+                df_result = pd.read_csv(io.StringIO(faq_result))
+                edited_df = st.data_editor(df_result, use_container_width=True, num_rows="dynamic", key="faq_editor")
+                csv_data = edited_df.to_csv(index=False).encode('utf-8')
+                st.download_button(
+                    label="📥 CSVをダウンロード",
+                    data=csv_data,
+                    file_name="extracted_faq.csv",
+                    mime="text/csv"
+                )
+            except Exception as e:
+                st.text_area("生成結果", faq_result, height=300)
+                st.download_button(
+                    label="📥 CSVをダウンロード",
+                    data=faq_result.encode('utf-8'),
+                    file_name="extracted_faq.csv",
+                    mime="text/csv"
+                )
+            
+            if st.button("結果をクリア"):
+                st.session_state.faq_result = None
+                st.rerun()
 
     elif app_mode == "QAチャット":
         st.title("💬 QAチャット")
         st.markdown("アップロード済みのファイルの内容に基づいて、AIが質問に答えます。")
-
-        # チャット履歴の初期化
-        if "messages" not in st.session_state:
-            st.session_state.messages = []
 
         # チャット履歴の表示
         for message in st.session_state.messages:
